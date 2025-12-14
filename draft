@@ -1,0 +1,271 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <cstdlib>
+#include <ctime>
+#include <iomanip>
+
+using namespace std;
+
+// ---------- Vehicle Base Class ----------
+class Vehicle {
+protected:
+    string plate;
+    int arrivalHour;
+public:
+    Vehicle(string p, int h) : plate(p), arrivalHour(h) {}
+    virtual ~Vehicle() {}
+    string getPlate() { return plate; }
+    int getArrival() { return arrivalHour; }
+
+    virtual int requiredSlots() = 0;
+    virtual bool needsCharger() { return false; }
+    virtual double billing(int hours, double energy = 0) = 0;
+    virtual string typeName() = 0;
+};
+
+// ---------- Vehicle Types ----------
+class Car : public Vehicle {
+public:
+    Car(string p, int h) : Vehicle(p, h) {}
+    int requiredSlots() override { return 1; }
+    double billing(int hours, double energy = 0) override { return 2.0 * hours; }
+    string typeName() override { return "Car"; }
+};
+
+class Motorbike : public Vehicle {
+public:
+    Motorbike(string p, int h) : Vehicle(p, h) {}
+    int requiredSlots() override { return 1; }
+    double billing(int hours, double energy = 0) override { return 0.6 * hours; }
+    string typeName() override { return "Motorbike"; }
+};
+
+class ElectricCar : public Vehicle {
+public:
+    ElectricCar(string p, int h) : Vehicle(p, h) {}
+    int requiredSlots() override { return 1; }
+    bool needsCharger() override { return true; }
+    double billing(int hours, double energy = 0) override { return 2.0 * hours + 0.3 * energy; }
+    string typeName() override { return "ElectricCar"; }
+};
+
+class Truck : public Vehicle {
+public:
+    Truck(string p, int h) : Vehicle(p, h) {}
+    int requiredSlots() override { return 2; }
+    double billing(int hours, double energy = 0) override { return 3.5 * hours + 5.0; }
+    string typeName() override { return "Truck"; }
+};
+
+// ---------- Slot ----------
+struct Slot {
+    bool occupied = false;
+    string vehiclePlate = "";
+};
+
+// ---------- SlotManager Template ----------
+template <typename T>
+class SlotManager {
+    vector<T> slots;
+public:
+    SlotManager(int n = 0) { slots.resize(n); }
+
+    int findFreeSlots(int k) {
+        for (int i = 0; i + k <= slots.size(); i++) {
+            bool free = true;
+            for (int j = 0; j < k; j++)
+                if (slots[i + j].occupied) { free = false; break; }
+            if (free) return i;
+        }
+        return -1;
+    }
+
+    void occupy(int idx, int k, string plate) {
+        for (int i = 0; i < k; i++) {
+            slots[idx + i].occupied = true;
+            slots[idx + i].vehiclePlate = plate;
+        }
+    }
+
+    void release(string plate) {
+        for (auto& s : slots)
+            if (s.occupied && s.vehiclePlate == plate) {
+                s.occupied = false;
+                s.vehiclePlate = "";
+            }
+    }
+
+    void display() {
+        for (int i = 0; i < slots.size(); i++)
+            cout << "[" << (slots[i].occupied ? "X" : " ") << "]";
+        cout << "\n";
+    }
+};
+
+// ---------- Parking Record ----------
+struct ParkRecord {
+    Vehicle* vehicle;
+    int slotIndex;
+    int arrival;
+    int exitHour;    // -1 if not exited yet
+    double energyUsed;
+    string zone;
+};
+
+// ---------- ParkingLot ----------
+class ParkingLot {
+    SlotManager<Slot> normalSlots;
+    SlotManager<Slot> evSlots;
+    SlotManager<Slot> truckSlots;
+    vector<Vehicle*> waitingQueue;
+    vector<ParkRecord> parkedVehicles;
+    int evChargerCount;
+public:
+    ParkingLot(int normal, int ev, int truck)
+        : normalSlots(normal), evSlots(ev), truckSlots(truck), evChargerCount(ev) {
+    }
+
+    void parkVehicle(Vehicle* v) {
+        int idx = -1;
+        string zone = "normal";
+
+        if (v->typeName() == "Truck") {
+            idx = truckSlots.findFreeSlots(v->requiredSlots());
+            if (idx != -1) zone = "truck";
+        }
+        else if (v->needsCharger()) {
+            idx = evSlots.findFreeSlots(v->requiredSlots());
+            if (idx != -1 && evChargerCount > 0) {
+                evChargerCount--;
+                zone = "EV";
+            }
+        }
+        else {
+            idx = normalSlots.findFreeSlots(v->requiredSlots());
+        }
+
+        if (idx != -1) {
+            if (zone == "truck") truckSlots.occupy(idx, v->requiredSlots(), v->getPlate());
+            else if (zone == "EV") evSlots.occupy(idx, v->requiredSlots(), v->getPlate());
+            else normalSlots.occupy(idx, v->requiredSlots(), v->getPlate());
+
+            parkedVehicles.push_back({ v, idx, v->getArrival(), -1, 0.0, zone });
+            cout << "\n>> " << v->typeName() << " with plate " << v->getPlate() << " parked in " << zone << " zone.\n";
+        }
+        else {
+            waitingQueue.push_back(v);
+            cout << "\n>> " << v->typeName() << " with plate " << v->getPlate() << " is waiting (garage full).\n";
+        }
+    }
+
+    void exitVehicle(string plate, int hours, int exitHour, double energy = 0) {
+        int found = -1;
+        for (int i = 0; i < parkedVehicles.size(); i++)
+            if (parkedVehicles[i].vehicle->getPlate() == plate) { found = i; break; }
+
+        if (found == -1) {
+            cout << "Vehicle not found.\n";
+            return;
+        }
+
+        ParkRecord& rec = parkedVehicles[found];
+        double bill = rec.vehicle->billing(hours, energy);
+        rec.exitHour = exitHour;  // store exit hour
+        cout << "\n>> " << rec.vehicle->typeName() << " " << plate << " checked out. Bill: $" << bill << "\n";
+
+        if (rec.zone == "truck") truckSlots.release(plate);
+        else if (rec.zone == "EV") { evSlots.release(plate); evChargerCount++; }
+        else normalSlots.release(plate);
+
+        // Remove from parkedVehicles and store exit info
+        parkedVehicles.erase(parkedVehicles.begin() + found);
+
+        if (!waitingQueue.empty()) {
+            Vehicle* next = waitingQueue.front();
+            waitingQueue.erase(waitingQueue.begin());
+            parkVehicle(next);
+        }
+
+        int chance = rand() % 100 + 1;
+        if (chance <= 5) cout << "Notice: minor scratch occurred.\n";
+        else if (chance <= 8) cout << "Notice: dent occurred.\n";
+        else if (chance == 9 && rec.vehicle->needsCharger()) cout << "Notice: EV battery overheating!\n";
+    }
+
+    void displayGarage() {
+        cout << "\n===== GARAGE STATUS =====\n";
+        cout << "Normal Slots: "; normalSlots.display();
+        cout << "EV Slots:     "; evSlots.display();
+        cout << "Truck Slots:  "; truckSlots.display();
+
+        cout << "\nParked Vehicles:\n";
+        cout << left << setw(12) << "Plate" << setw(15) << "Type" << setw(10) << "Zone"
+            << setw(8) << "Arrival" << setw(8) << "Exit" << "\n";
+
+        for (auto& p : parkedVehicles) {
+            string exitDisplay = (p.exitHour == -1 ? "-" : to_string(p.exitHour));
+            cout << setw(12) << p.vehicle->getPlate()
+                << setw(15) << p.vehicle->typeName()
+                << setw(10) << p.zone
+                << setw(8) << p.arrival
+                << setw(8) << exitDisplay << "\n";
+        }
+
+        if (!waitingQueue.empty()) {
+            cout << "\nWaiting Queue: ";
+            for (auto& v : waitingQueue)
+                cout << v->getPlate() << " ";
+            cout << "\n";
+        }
+        cout << "=========================\n";
+    }
+};
+
+// ---------- Main ----------
+int main() {
+    srand(time(0));
+
+    ParkingLot lot(5, 3, 2);
+
+    while (true) {
+        cout << "\n---- Automated Parking System ----\n";
+        cout << "1. Park Vehicle\n2. Exit Vehicle\n3. Display Garage\n4. Exit Program\n";
+        cout << "Choose an option: ";
+        int choice; cin >> choice;
+
+        if (choice == 1) {
+            cout << "Select vehicle type:\n";
+            cout << "1. Car\n2. Motorbike\n3. Electric Car\n4. Truck\n";
+            int type; cin >> type;
+            string plate; int hour;
+            cout << "Enter plate number: "; cin >> plate;
+            cout << "Enter arrival hour: "; cin >> hour;
+            Vehicle* v = nullptr;
+            if (type == 1) v = new Car(plate, hour);
+            else if (type == 2) v = new Motorbike(plate, hour);
+            else if (type == 3) v = new ElectricCar(plate, hour);
+            else if (type == 4) v = new Truck(plate, hour);
+            else { cout << "Invalid type!\n"; continue; }
+            lot.parkVehicle(v);
+        }
+        else if (choice == 2) {
+            string plate; int hours, exitHour, energy = 0;
+            cout << "Enter plate number to exit: "; cin >> plate;
+            cout << "Enter hours parked: "; cin >> hours;
+            cout << "Enter exit hour: "; cin >> exitHour;
+            cout << "Enter energy used (for EVs, 0 otherwise): "; cin >> energy;
+            lot.exitVehicle(plate, hours, exitHour, energy);
+        }
+        else if (choice == 3) {
+            lot.displayGarage();
+        }
+        else if (choice == 4) {
+            cout << "Exiting system. Goodbye!\n";
+            break;
+        }
+        else cout << "Invalid choice!\n";
+    }
+
+    return 0;
+}
