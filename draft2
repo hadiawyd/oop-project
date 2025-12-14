@@ -110,7 +110,7 @@ public:
 
         if (v->typeName() == "Truck") {
             if (truckSlotsAvailable >= v->requiredSlots()) {
-                truckSlotsAvailable -= v->requiredSlots();
+                truckSlotsAvailable -= v->requiredSlots(); // basically checks if there are slots available
                 zone = "Truck";
                 parked = true;
             }
@@ -130,23 +130,19 @@ public:
             }
         }
 
-        if (parked) {
-            allVehicles.push_back({ v, v->getArrival(), -1, 0.0, zone, 0.0 });
+        if (parked) { //means we found space or a free slot
+            allVehicles.push_back({ v, v->getArrival(), -1, 0.0, zone, 0.0 }); //store arrival time,exit hour,energy,bill
             cout << "\n>> " << v->typeName() << " with plate " << v->getPlate() << " parked in " << zone << " zone.\n";
-
-            // Vehicle-specific function example
-            ElectricCar* ec = dynamic_cast<ElectricCar*>(v);
-            if (ec) ec->startCharging();
         } 
-        else {
-            waitingQueue.push_back(v);
+        else { //no space
+            waitingQueue.push_back(v); //add vehicle to waiting
             cout << "\n>> " << v->typeName() << " with plate " << v->getPlate() << " cannot be parked. Garage has reached its limit!\n";
         }
     }
 
     void exitVehicle(string plate, int hours) {
         int found = -1;
-        for (int i = 0; i < allVehicles.size(); i++)
+        for (int i = 0; i < allVehicles.size(); i++) //check if the plate number is the correct one and this vehicle has not been exited before
             if (allVehicles[i].vehicle->getPlate() == plate && allVehicles[i].exitHour == -1) {
                 found = i;
                 break;
@@ -157,7 +153,7 @@ public:
             return;
         }
 
-        ParkRecord& rec = allVehicles[found];
+        ParkRecord& rec = allVehicles[found]; // a reference to the vehicle's ParkRecord to modify it directly in allVehicle
         double energy = 0.0;
         if (rec.vehicle->needsCharger()) energy = hours; // EV charging = hours parked
 
@@ -165,15 +161,15 @@ public:
         rec.bill = rec.vehicle->billing(hours, energy);
         cout << "\n>> " << rec.vehicle->typeName() << " " << plate << " checked out. Bill: $" << rec.bill << "\n";
 
-        // Free the slot
+        // frees the slot
         if (rec.zone == "Truck") truckSlotsAvailable += rec.vehicle->requiredSlots();
         else if (rec.zone == "EV") evSlotsAvailable += rec.vehicle->requiredSlots();
         else normalSlotsAvailable += rec.vehicle->requiredSlots();
 
         // Park waiting vehicles if space is now available
         if (!waitingQueue.empty()) {
-            Vehicle* next = waitingQueue.front();
-            waitingQueue.erase(waitingQueue.begin());
+            Vehicle* next = waitingQueue.front(); //take the first vehicle in queue and erase it
+            waitingQueue.erase(waitingQueue.begin()); //and now park it in the free slot
             parkVehicle(next);
         }
     }
