@@ -137,7 +137,7 @@ public:
             // Vehicle-specific function example
             ElectricCar* ec = dynamic_cast<ElectricCar*>(v);
             if (ec) ec->startCharging();
-        }
+        } 
         else {
             waitingQueue.push_back(v);
             cout << "\n>> " << v->typeName() << " with plate " << v->getPlate() << " cannot be parked. Garage has reached its limit!\n";
