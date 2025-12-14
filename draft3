@@ -4,10 +4,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
-
 using namespace std;
 
-// ---------- Vehicle Base Class ----------
 class Vehicle {
 protected:
     string plate;
@@ -24,7 +22,6 @@ public:
     virtual string typeName() = 0; //output name
 };
 
-// ---------- Vehicle Types ----------
 class Car : public Vehicle {
 public:
     Car(string p, int h) : Vehicle(p, h) {}
@@ -59,7 +56,6 @@ public:
     string typeName() override { return "Rickshaw"; }
 };
 
-// ---------- Motorbike Polymorphism ----------
 class Motorbike : public Vehicle {
 public:
     Motorbike(string p, int h) : Vehicle(p, h) {}
@@ -82,7 +78,6 @@ public:
     string typeName() override { return "HeavyBike"; }
 };
 
-// ---------- Parking Record ----------
 struct ParkRecord {
     Vehicle* vehicle;
     int arrival;
@@ -92,7 +87,6 @@ struct ParkRecord {
     double bill; // store final bill
 };
 
-// ---------- ParkingLot ----------
 class ParkingLot {
     int normalSlotsAvailable;
     int evSlotsAvailable;
@@ -206,7 +200,6 @@ public:
     }
 };
 
-// ---------- Main ----------
 int main() {
     srand(time(0));
 
