@@ -26,7 +26,7 @@ polymorphism, and dynamic memory allocation.
   - Heavy Bike  
 Each vehicle has its own parking fee and slot requirement.
 
-## Input Sequne is given below
+## Input Sequnce is given below
 
 -First enter the number of slots available for each zone(Normal,EV,Truck)
 -Input Plate Number: Plate number must be in the format:
